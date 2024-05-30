@@ -1,4 +1,4 @@
-# 1. uild compile image
+# 1. Byuild compile image
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
 WORKDIR /build
 COPY . .
