@@ -1,6 +1,5 @@
 using MongoDB.Driver;
 
-
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<MovieService>();
 
@@ -12,63 +11,37 @@ var app = builder.Build();
 app.MapGet("/", () => "Minimal API nach Arbeitsauftrag 3");
 
 // docker run --name mongodb -d -p 27017:27017 -v data:/data/db -e MONGO_INITDB_ROOT_USERNAME=gbs -e MONGO_INITDB_ROOT_PASSWORD=geheim mongo
-app.MapGet("/check", (Microsoft.Extensions.Options.IOptions<DatabaseSettings> options) => {
-    
-    try
-    {
-        var mongoDbConnectionString = options.Value.ConnectionString;
-        var mongoClient = new MongoClient(mongoDbConnectionString);
-        var databaseNames = mongoClient.ListDatabaseNames().ToList();
-
-        return "Zugriff auf MongoDB ok. Vorhandene DBs: " + string.Join(",", databaseNames);
-    }
-    catch (System.Exception e)
-    {
-        return "Zugriff auf MongoDB funktioniert nicht: " + e.Message;
-    }         
-
+app.MapGet("/check", (MovieService movieService) => {
+    return movieService.Check();
 });
 
 // Insert Movie
-// Wenn das übergebene Objekt eingefügt werden konnte, 
-// wird es mit Statuscode 200 zurückgegeben. 
-// Bei Fehler wird Statuscode 409 Conflict zurückgegeben.
-app.MapPost("/api/movies", (Movie movie) =>
+app.MapPost("/api/movies", async (Movie movie, MovieService movieService) =>
 {
-    return Results.Ok(movie);
+    try
+    {
+        await movieService.Create(movie);
+        return Results.Ok(movie);
+    }
+    catch (Exception)
+    {
+        return Results.Conflict();
+    }
 });
 
 // Get all Movies
-// Gibt alle vorhandenen Movie-Objekte mit Statuscode 200 OK zurück.
-app.MapGet("api/movies", () =>
+app.MapGet("api/movies", async (MovieService movieService) =>
 {
-    var movies = new List<Movie>();
-
-    var movie1 = new Movie();
-    movie1.Id = "1";
-    movie1.Title = "Ein Quantum Trost";
-    movies.Add(movie1);
-
-    var movie2 = new Movie();
-    movie2.Id = "2";
-    movie2.Title = "Tomorrow Never Dies";
-    movies.Add(movie2);
-
+    var movies = await movieService.Get();
     return Results.Ok(movies);
 });
 
 // Get Movie by id
-// Gibt das gewünschte Movie-Objekt mit Statuscode 200 OK zurück.
-// Bei ungültiger id wird Statuscode 404 not found zurückgegeben.
-app.MapGet("api/movies/{id}", (string id) =>
+app.MapGet("api/movies/{id}", async (string id, MovieService movieService) =>
 {    
-    if(id == "1")
+    var movie = await movieService.Get(id);
+    if (movie != null)
     {
-        var movie = new Movie()
-        {
-            Id = "1",
-            Title = "Ein Quantum Trost",
-        };
         return Results.Ok(movie);
     }
     else
@@ -78,20 +51,31 @@ app.MapGet("api/movies/{id}", (string id) =>
 });
 
 // Update Movie
-// Gibt das aktualisierte Movie-Objekt zurück.
-// Bei ungültiger id wird Statuscode 404 not found zurückgegeben.
-app.MapPut("/api/movies/{id}", (string id, Movie movie) =>
+app.MapPut("/api/movies/{id}", async (string id, Movie movie, MovieService movieService) =>
 {
-    movie.Id = id;
-    return Results.Ok(movie);
+    var updatedMovie = await movieService.Update(id, movie);
+    if (updatedMovie != null)
+    {
+        return Results.Ok(updatedMovie);
+    }
+    else
+    {
+        return Results.NotFound();
+    }
 });
 
 // Delete Movie
-// Gibt bei erfolgreicher Löschung Statuscode 200 OK zurück.
-// Bei ungültiger id wird Statuscode 404 not found zurückgegeben.
-app.MapDelete("api/movies/{id}", (string id) =>
+app.MapDelete("api/movies/{id}", async (string id, MovieService movieService) =>
 {
-    return Results.Ok();
+    var result = await movieService.Remove(id);
+    if (result)
+    {
+        return Results.Ok();
+    }
+    else
+    {
+        return Results.NotFound();
+    }
 });
 
 app.Run();
